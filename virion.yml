@@ -1,0 +1,8 @@
+---
+name: selection-visualize-utils
+antigen: kim\present\utils\selectionvisualize
+version: 1.0.0
+api: [ 5.0.0 ]
+author: PresentKim
+description: "Provides utils for display block selection to player!"
+...
