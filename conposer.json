@@ -1,0 +1,22 @@
+{
+  "name": "selection-visualize-utils",
+  "description": "Provides utils for display block selection to player for PocketMine-MP",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "pocketmine/pocketmine-mp": "^5.0.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "kim\\present\\utils\\selectionvisualize\\": [
+        "src/kim/present/utils/selectionvisualize/"
+      ]
+    }
+  },
+  "extra": {
+    "virion": {
+      "spec": "3.0",
+      "namespace-root": "kim\\present\\utils\\selectionvisualize"
+    }
+  }
+}
