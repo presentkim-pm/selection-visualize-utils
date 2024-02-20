@@ -24,35 +24,29 @@
 
 declare(strict_types=1);
 
-namespace kim\present\utils\selectionvisualize\block;
+namespace kim\present\utils\selectionvisualize;
 
-use pocketmine\block\BlockBreakInfo;
-use pocketmine\block\BlockIdentifier;
-use pocketmine\block\BlockTypeIds;
-use pocketmine\block\BlockTypeInfo;
-use pocketmine\block\Opaque;
 use pocketmine\math\Vector3;
 use pocketmine\nbt\tag\CompoundTag;
 
-class StructureBlock extends Opaque{
+final class SelectionBlockData{
+	public readonly int $networkId;
 
-	private CompoundTag $tileNbt;
+	public readonly CompoundTag $tileNbt;
 
+	public Vector3 $pos;
 	private Vector3 $offset;
 	private Vector3 $size;
 
 	public function __construct(){
+		$this->networkId = SelectionVisualizeUtils::getStructureBlockNetworkId();
+
 		$this->tileNbt = new CompoundTag();
 		$this->tileNbt->setByte("showBoundingBox", 1);
 
+		$this->pos = Vector3::zero();
 		$this->setOffset(Vector3::zero());
 		$this->setSize(new Vector3(1, 1, 1));
-
-		parent::__construct(
-			new BlockIdentifier(BlockTypeIds::newId()),
-			"Structure Block",
-			new BlockTypeInfo(BlockBreakInfo::instant())
-		);
 	}
 
 	public function getOffset() : Vector3{
@@ -79,14 +73,5 @@ class StructureBlock extends Opaque{
 			->setInt("yStructureSize", $this->size->y)
 			->setInt("zStructureSize", $this->size->z);
 		return $this;
-	}
-
-	public function getTileData() : CompoundTag{
-		return $this->tileNbt;
-	}
-
-	public function __clone(){
-		$this->tileNbt = clone $this->tileNbt;
-		parent::__clone();
 	}
 }

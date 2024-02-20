@@ -26,50 +26,62 @@ declare(strict_types=1);
 
 namespace kim\present\utils\selectionvisualize;
 
-use kim\present\utils\selectionvisualize\block\StructureBlock;
 use kim\present\utils\selectionvisualize\task\RegisterStructureBlockTask;
-use pocketmine\block\Block;
+use pocketmine\block\BlockBreakInfo;
+use pocketmine\block\BlockIdentifier;
+use pocketmine\block\BlockTypeIds;
+use pocketmine\block\BlockTypeInfo;
+use pocketmine\block\Opaque;
 use pocketmine\block\RuntimeBlockStateRegistry;
 use pocketmine\data\bedrock\block\BlockStateNames;
 use pocketmine\data\bedrock\block\BlockStateStringValues;
 use pocketmine\data\bedrock\block\BlockTypeNames;
 use pocketmine\data\bedrock\block\convert\BlockStateWriter;
+use pocketmine\network\mcpe\convert\TypeConverter;
 use pocketmine\Server;
 use pocketmine\world\format\io\GlobalBlockStateHandlers;
 
 final class SelectionVisualizeUtils{
-	private static StructureBlock $block;
+	private static int $structureBlockNetworkId;
 
 	private function __construct(){
 		// NOOP
 	}
 
+	/** @internal */
 	public static function registerStructureBlock() : void{
-		if(isset(self::$block)){
+		if(isset(self::$structureBlockNetworkId)){
 			return;
 		}
-		self::$block = new StructureBlock();
-		GlobalBlockStateHandlers::getSerializer()->map(self::$block, function(Block $block) : BlockStateWriter{
-			if(!($block instanceof StructureBlock)){
-				return BlockStateWriter::create(BlockTypeNames::STRUCTURE_BLOCK);
-			}
-			return BlockStateWriter::create(BlockTypeNames::STRUCTURE_BLOCK)->writeString(
+		$block = new Opaque(
+			new BlockIdentifier(BlockTypeIds::newId()),
+			"Structure Block",
+			new BlockTypeInfo(BlockBreakInfo::instant())
+		);
+
+		GlobalBlockStateHandlers::getSerializer()->map(
+			$block,
+			fn() => BlockStateWriter::create(BlockTypeNames::STRUCTURE_BLOCK)->writeString(
 				BlockStateNames::STRUCTURE_BLOCK_TYPE,
 				BlockStateStringValues::STRUCTURE_BLOCK_TYPE_DATA
-			);
-		});
+			)
+		);
+		RuntimeBlockStateRegistry::getInstance()->register($block);
 
-		RuntimeBlockStateRegistry::getInstance()->register(self::$block);
+		self::$structureBlockNetworkId = TypeConverter::getInstance()->getBlockTranslator()->internalIdToNetworkId(
+			$block->getStateId()
+		);
 	}
 
-	public static function getStructureBlock() : StructureBlock{
-		if(!isset(self::$block)){
+	/** @internal */
+	public static function getStructureBlockNetworkId() : int{
+		if(!isset(self::$structureBlockNetworkId)){
 			self::registerStructureBlock();
 			$asyncPool = Server::getInstance()->getAsyncPool();
 			$asyncPool->addWorkerStartHook(static function(int $workerId) use ($asyncPool) : void{
 				$asyncPool->submitTaskToWorker(new RegisterStructureBlockTask(), $workerId);
 			});
 		}
-		return clone self::$block;
+		return self::$structureBlockNetworkId;
 	}
 }

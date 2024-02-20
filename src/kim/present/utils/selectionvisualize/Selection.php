@@ -26,9 +26,7 @@ declare(strict_types=1);
 
 namespace kim\present\utils\selectionvisualize;
 
-use kim\present\utils\selectionvisualize\block\StructureBlock;
 use pocketmine\math\Vector3;
-use pocketmine\network\mcpe\convert\TypeConverter;
 use pocketmine\network\mcpe\NetworkBroadcastUtils;
 use pocketmine\network\mcpe\protocol\BlockActorDataPacket;
 use pocketmine\network\mcpe\protocol\types\BlockPosition;
@@ -51,8 +49,8 @@ final class Selection{
 	private static array $usedYMap = [];
 
 	/**
-	 * @var StructureBlock[] $overrided
-	 * @phpstan-var array<PlayerObjectId, StructureBlock>
+	 * @var SelectionBlockData[] $overrided
+	 * @phpstan-var array<PlayerObjectId, SelectionBlockData>
 	 */
 	private array $overrided = [];
 
@@ -70,8 +68,12 @@ final class Selection{
 	public function sendTo(Player $player) : void{
 		$id = spl_object_id($player);
 		if(isset($this->overrided[$id])){
+			$data = $this->overrided[$id];
 			$this->restoreFrom($player);
+		}else{
+			$data = new SelectionBlockData();
 		}
+
 
 		$min = new Vector3(
 			(int) min($this->pos1->x, $this->pos2->x),
@@ -85,24 +87,22 @@ final class Selection{
 		);
 
 		$minY = self::getMinY($id, $min->x, $min->z);
-		$block = SelectionVisualizeUtils::getStructureBlock();
-		$block->position($player->getWorld(), $min->x, $minY, $min->z);
-		$block->setOffset(new Vector3(0, $min->y - $minY, 0));
-		$block->setSize($max->subtractVector($min)->add(1, 1, 1));
 
-		$blockPos = BlockPosition::fromVector3($block->getPosition());
-		$player->getNetworkSession()->sendDataPacket(UpdateBlockPacket::create(
-			$blockPos,
-			TypeConverter::getInstance()->getBlockTranslator()->internalIdToNetworkId($block->getStateId()),
-			UpdateBlockPacket::FLAG_NETWORK,
-			UpdateBlockPacket::DATA_LAYER_NORMAL
-		));
-		$player->getNetworkSession()->sendDataPacket(BlockActorDataPacket::create(
-			$blockPos,
-			new CacheableNbt($block->getTileData())
-		));
+		$data->pos = new Vector3($min->x, $minY, $min->z);
+		$data->setOffset(new Vector3(0, $min->y - $minY, 0));
+		$data->setSize($max->subtractVector($min)->add(1, 1, 1));
 
-		$this->overrided[$id] = $block;
+		$blockPos = BlockPosition::fromVector3($data->pos);
+		NetworkBroadcastUtils::broadcastPackets([$player], [
+			UpdateBlockPacket::create($blockPos,
+				$data->networkId,
+				UpdateBlockPacket::FLAG_NETWORK,
+				UpdateBlockPacket::DATA_LAYER_NORMAL
+			),
+			BlockActorDataPacket::create($blockPos, new CacheableNbt($data->tileNbt))
+		]);
+
+		$this->overrided[$id] = $data;
 		$this->viewers[$id] = $player;
 	}
 
@@ -112,7 +112,7 @@ final class Selection{
 			return;
 		}
 
-		$pos = $this->overrided[$id]->getPosition();
+		$pos = $this->overrided[$id]->pos;
 		NetworkBroadcastUtils::broadcastPackets([$player], $player->getWorld()->createBlockUpdatePackets([$pos]));
 
 		self::releaseY($id, $pos->x, $pos->y, $pos->z);
