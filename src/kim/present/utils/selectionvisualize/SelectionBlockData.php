@@ -39,7 +39,7 @@ final class SelectionBlockData{
 	private Vector3 $size;
 
 	public function __construct(){
-		$this->networkId = SelectionVisualizeUtils::getStructureBlockNetworkId();
+		$this->networkId = SelectionVisualizeUtils::getBlockNetworkId();
 
 		$this->tileNbt = new CompoundTag();
 		$this->tileNbt->setByte("showBoundingBox", 1);
