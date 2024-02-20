@@ -26,7 +26,6 @@ declare(strict_types=1);
 
 namespace kim\present\utils\selectionvisualize;
 
-use kim\present\utils\selectionvisualize\task\RegisterStructureBlockTask;
 use pocketmine\block\BlockBreakInfo;
 use pocketmine\block\BlockIdentifier;
 use pocketmine\block\BlockTypeIds;
@@ -38,7 +37,6 @@ use pocketmine\data\bedrock\block\BlockStateStringValues;
 use pocketmine\data\bedrock\block\BlockTypeNames;
 use pocketmine\data\bedrock\block\convert\BlockStateWriter;
 use pocketmine\network\mcpe\convert\TypeConverter;
-use pocketmine\Server;
 use pocketmine\world\format\io\GlobalBlockStateHandlers;
 
 final class SelectionVisualizeUtils{
@@ -49,10 +47,11 @@ final class SelectionVisualizeUtils{
 	}
 
 	/** @internal */
-	public static function registerStructureBlock() : void{
+	public static function getStructureBlockNetworkId() : int{
 		if(isset(self::$structureBlockNetworkId)){
-			return;
+			return self::$structureBlockNetworkId;
 		}
+
 		$block = new Opaque(
 			new BlockIdentifier(BlockTypeIds::newId()),
 			"Structure Block",
@@ -68,20 +67,6 @@ final class SelectionVisualizeUtils{
 		);
 		RuntimeBlockStateRegistry::getInstance()->register($block);
 
-		self::$structureBlockNetworkId = TypeConverter::getInstance()->getBlockTranslator()->internalIdToNetworkId(
-			$block->getStateId()
-		);
-	}
-
-	/** @internal */
-	public static function getStructureBlockNetworkId() : int{
-		if(!isset(self::$structureBlockNetworkId)){
-			self::registerStructureBlock();
-			$asyncPool = Server::getInstance()->getAsyncPool();
-			$asyncPool->addWorkerStartHook(static function(int $workerId) use ($asyncPool) : void{
-				$asyncPool->submitTaskToWorker(new RegisterStructureBlockTask(), $workerId);
-			});
-		}
-		return self::$structureBlockNetworkId;
+		return self::$structureBlockNetworkId = TypeConverter::getInstance()->getBlockTranslator()->internalIdToNetworkId($block->getStateId());
 	}
 }
