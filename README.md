@@ -23,33 +23,44 @@
 
 
 <!-- ABOUT THE PROJECT -->
+
 ## About The Project
+
 :heavy_check_mark: Provides `Selection` class for display block selection to player
+
 - `kim\present\utils\selectionvisualize\Selection`
 
 -----
 
 ## Installation
+
 See [Official Poggit Virion Documentation](https://github.com/poggit/support/blob/master/virion.md)
 
 -----
 
 ## How to use?
+
 See [Main Document](https://github.com/presentkim-pm/selection-visualize-utils/blob/main/docs/README.md)
 
 -----
 
 ## License
+
 Distributed under the **MIT**. See [LICENSE][license-url] for more information
 
 
 [poggit-ci-badge]: https://poggit.pmmp.io/ci.shield/presentkim-pm/selection-visualize-utils/selection-visualize-utils?style=for-the-badge
+
 [stars-badge]: https://img.shields.io/github/stars/presentkim-pm/selection-visualize-utils.svg?style=for-the-badge
+
 [license-badge]: https://img.shields.io/github/license/presentkim-pm/selection-visualize-utils.svg?style=for-the-badge
 
 [poggit-ci-url]: https://poggit.pmmp.io/ci/presentkim-pm/selection-visualize-utils/selection-visualize-utils
+
 [stars-url]: https://github.com/presentkim-pm/selection-visualize-utils/stargazers
+
 [issues-url]: https://github.com/presentkim-pm/selection-visualize-utils/issues
+
 [license-url]: https://github.com/presentkim-pm/selection-visualize-utils/blob/main/LICENSE
 
 [project-icon]: https://raw.githubusercontent.com/presentkim-pm/selection-visualize-utils/main/assets/icon.png

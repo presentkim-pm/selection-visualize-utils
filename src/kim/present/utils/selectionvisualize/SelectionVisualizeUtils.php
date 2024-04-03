@@ -40,29 +40,30 @@ use pocketmine\network\mcpe\convert\TypeConverter;
 use pocketmine\world\format\io\GlobalBlockStateHandlers;
 
 final class SelectionVisualizeUtils{
-	private static int $blockNetworkId;
 
-	private function __construct(){
-		// NOOP
-	}
+    private static int $blockNetworkId;
 
-	/** @internal */
-	public static function getBlockNetworkId() : int{
-		if(isset(self::$blockNetworkId)){
-			return self::$blockNetworkId;
-		}
+    private function __construct(){
+        // NOOP
+    }
 
-		$block = new Opaque(new BID(Ids::newId()), "Structure Block", new TypeInfo(BreakInfo::instant()));
-		GlobalBlockStateHandlers::getSerializer()->map(
-			$block,
-			fn() => BlockStateWriter::create(BlockTypeNames::STRUCTURE_BLOCK)->writeString(
-				BlockStateNames::STRUCTURE_BLOCK_TYPE,
-				BlockStateStringValues::STRUCTURE_BLOCK_TYPE_DATA
-			)
-		);
-		RuntimeBlockStateRegistry::getInstance()->register($block);
+    /** @internal */
+    public static function getBlockNetworkId() : int{
+        if(isset(self::$blockNetworkId)){
+            return self::$blockNetworkId;
+        }
 
-		$blockTranslator = TypeConverter::getInstance()->getBlockTranslator();
-		return self::$blockNetworkId = $blockTranslator->internalIdToNetworkId($block->getStateId());
-	}
+        $block = new Opaque(new BID(Ids::newId()), "Structure Block", new TypeInfo(BreakInfo::instant()));
+        GlobalBlockStateHandlers::getSerializer()->map(
+            $block,
+            fn() => BlockStateWriter::create(BlockTypeNames::STRUCTURE_BLOCK)->writeString(
+                BlockStateNames::STRUCTURE_BLOCK_TYPE,
+                BlockStateStringValues::STRUCTURE_BLOCK_TYPE_DATA
+            )
+        );
+        RuntimeBlockStateRegistry::getInstance()->register($block);
+
+        $blockTranslator = TypeConverter::getInstance()->getBlockTranslator();
+        return self::$blockNetworkId = $blockTranslator->internalIdToNetworkId($block->getStateId());
+    }
 }
