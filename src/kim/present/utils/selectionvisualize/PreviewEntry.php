@@ -35,7 +35,7 @@ use pocketmine\world\Position;
  * - $position: world position where the preview is shown.
  * - $block: block that will be faked on the NORMAL data layer (install candidate).
  * - $liquidBlock: optional block faked on the LIQUID data layer as an overlay.
- *   If null, a default tinted glass is used by BlockPreview.
+ *   If null, no liquid layer overlay is sent (only the NORMAL layer is faked).
  */
 final class PreviewEntry{
     public function __construct(

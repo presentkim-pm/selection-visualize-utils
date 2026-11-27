@@ -1,9 +1,0 @@
----
-branches:
-  - main
-projects:
-  selection-visualize-utils:
-    path: ""
-    model: virion
-    type: library
-...

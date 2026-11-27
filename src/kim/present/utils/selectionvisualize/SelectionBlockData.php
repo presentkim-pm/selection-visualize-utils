@@ -29,6 +29,9 @@ namespace kim\present\utils\selectionvisualize;
 use pocketmine\math\Vector3;
 use pocketmine\nbt\tag\CompoundTag;
 
+use function max;
+use function min;
+
 /**
  * Holds data for a single structure block used to visualize a selection:
  * network ID, tile NBT (bounding box), position, offset and size.
@@ -96,12 +99,17 @@ final class SelectionBlockData{
 
     /**
      * Sets the structure size and writes it to tile NBT (x/y/zStructureSize).
+     * Each axis is at least 1.
      *
      * @param Vector3 $size Width, height and depth of the bounding box.
      * Side effect: mutates $this->tileNbt.
      */
     public function setSize(Vector3 $size) : self{
-        $this->size = $size;
+        $this->size = new Vector3(
+            max(1, (int) $size->x),
+            max(1, (int) $size->y),
+            max(1, (int) $size->z)
+        );
         $this->tileNbt
             ->setInt("xStructureSize", (int) $this->size->x)
             ->setInt("yStructureSize", (int) $this->size->y)

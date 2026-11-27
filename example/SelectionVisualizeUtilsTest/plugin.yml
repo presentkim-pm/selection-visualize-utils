@@ -4,7 +4,7 @@ main: kim\present\utils\selectionvisualize\test\Main
 version: 0.1.0
 api: [ 5.0.0 ]
 author: PresentKim
-description: selection-visualize-utils virion test plugin
+description: selection-visualize-utils library test plugin
 
 commands:
   selectionvisualize:

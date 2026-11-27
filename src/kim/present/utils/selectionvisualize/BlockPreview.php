@@ -30,17 +30,19 @@ use pocketmine\block\Block;
 use pocketmine\block\VanillaBlocks;
 use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\convert\TypeConverter;
-use pocketmine\network\mcpe\NetworkBroadcastUtils;
 use pocketmine\network\mcpe\protocol\types\BlockPosition;
 use pocketmine\network\mcpe\protocol\UpdateBlockPacket;
 use pocketmine\player\Player;
 use pocketmine\plugin\PluginBase;
 use pocketmine\scheduler\ClosureTask;
+use pocketmine\world\World;
+use WeakMap;
+use WeakReference;
 
 /**
  * Renders a temporary block preview to a player by:
  * - faking the install blocks on the normal layer
- * - overlaying a tinted glass on the liquid layer
+ * - optionally overlaying a block on the liquid layer (PreviewEntry::$liquidBlock)
  * - delaying packets by one tick to avoid being overwritten by server sync
  *
  * Typical usage:
@@ -56,26 +58,36 @@ use pocketmine\scheduler\ClosureTask;
  */
 final class BlockPreview{
     /**
-     * @var array<string, BlockPosition[]>
+     * Currently shown preview per player: the positions and the world they were sent in.
+     *
+     * @var WeakMap<Player, array{BlockPosition[], WeakReference<World>, bool}>
      */
-    private array $lastPreview = [];
+    private WeakMap $lastPreview;
 
     /**
-     * @var array<string, PreviewEntry[]>
+     * Entries waiting for the delayed flush.
+     *
+     * @var WeakMap<Player, PreviewEntry[]>
      */
-    private array $pendingEntries = [];
+    private WeakMap $pendingEntries;
 
     /**
-     * @var array<string, bool>
+     * Players that already have a flush task scheduled.
+     *
+     * @var WeakMap<Player, true>
      */
-    private array $pendingTasks = [];
+    private WeakMap $pendingTasks;
 
     /**
      * @param PluginBase $plugin Owner plugin used to schedule delayed preview tasks.
      */
     public function __construct(
         private readonly PluginBase $plugin,
-    ){}
+    ){
+        $this->lastPreview = new WeakMap();
+        $this->pendingEntries = new WeakMap();
+        $this->pendingTasks = new WeakMap();
+    }
 
     /**
      * Returns the last previewed block positions for the given player.
@@ -86,58 +98,68 @@ final class BlockPreview{
      * @return BlockPosition[] Positions currently used to show the preview to this player.
      */
     public function getPreviewPositions(Player $player) : array{
-        return $this->lastPreview[$player->getName()] ?? [];
+        return ($this->lastPreview[$player] ?? [[]])[0];
     }
 
     /**
-     * Clears any active preview for the given player.
+     * Clears any active or pending preview for the given player.
      *
      * Behaviour:
-     * - Restores the NORMAL data layer to the real world block at each previewed position.
-     * - Clears the LIQUID data layer overlay (tinted glass or custom liquidBlock).
+     * - Cancels a preview that was requested with show() but not flushed yet.
+     * - Restores the NORMAL data layer to the real world block at each previewed position and clears the
+     *   LIQUID data layer overlay (only if a liquid overlay was sent), but only if the player is still
+     *   in the world the preview was shown in; after a world change just the bookkeeping is dropped.
      * - Forgets the stored preview positions for this player.
      *
      * @param Player $player Target player to clear preview for.
      */
     public function clear(Player $player) : void{
-        $playerName = $player->getName();
-        if(!isset($this->lastPreview[$playerName]) || $this->lastPreview[$playerName] === []){
+        // A preview that was not flushed yet must never appear after clear()
+        unset($this->pendingEntries[$player]);
+
+        if(!isset($this->lastPreview[$player])){
             return;
         }
 
-        $airRuntimeId = $this->getAirRuntimeId();
+        [$positions, $worldRef, $hasLiquid] = $this->lastPreview[$player];
+        unset($this->lastPreview[$player]);
+
+        $world = $worldRef->get();
+        if($positions === [] || $world === null || !$player->isConnected() || $player->getWorld() !== $world){
+            return;
+        }
+
         $packets = [];
         $blocks = [];
-        foreach($this->lastPreview[$playerName] as $blockPosition){
-            $packets[] = UpdateBlockPacket::create(
-                $blockPosition,
-                $airRuntimeId,
-                UpdateBlockPacket::FLAG_NETWORK,
-                UpdateBlockPacket::DATA_LAYER_LIQUID
-            );
+        $airRuntimeId = $hasLiquid ? $this->getAirRuntimeId() : 0;
+        foreach($positions as $blockPosition){
+            if($hasLiquid){
+                $packets[] = UpdateBlockPacket::create(
+                    $blockPosition,
+                    $airRuntimeId,
+                    UpdateBlockPacket::FLAG_NETWORK,
+                    UpdateBlockPacket::DATA_LAYER_LIQUID
+                );
+            }
 
             $blocks[] = new Vector3($blockPosition->getX(), $blockPosition->getY(), $blockPosition->getZ());
         }
-        NetworkBroadcastUtils::broadcastPackets(
-            [$player],
-            [...$packets, ...$player->getWorld()->createBlockUpdatePackets($blocks)]
-        );
-
-        unset($this->lastPreview[$player->getName()]);
+        PacketDispatcher::send($player, [...$packets, ...$world->createBlockUpdatePackets($blocks)]);
     }
 
     /**
      * Shows a block preview to the given player.
      *
      * Behaviour:
-     * - Immediately clears any existing preview for the player.
+     * - Immediately clears any existing (or still pending) preview for the player.
      * - Stores the provided PreviewEntry list as a pending preview.
      * - Schedules a 1-tick delayed task to actually send UpdateBlockPacket(s), to avoid
      *   being overwritten by PocketMine-MP's own resync packets on the same tick.
+     * - Entries whose position is in another world than the player's are skipped.
      *
      * Each PreviewEntry is rendered as:
      * - NORMAL layer: entry->block (fake install block)
-     * - LIQUID layer: entry->liquidBlock if provided, otherwise tinted glass.
+     * - LIQUID layer: entry->liquidBlock if provided; nothing is sent on this layer otherwise.
      *
      * @param Player       $player     Target player.
      * @param PreviewEntry ...$entries One or more preview entries to render.
@@ -149,14 +171,13 @@ final class BlockPreview{
             return;
         }
 
-        $name = $player->getName();
-        $this->pendingEntries[$name] = $entries;
+        $this->pendingEntries[$player] = $entries;
 
-        if(isset($this->pendingTasks[$name])){
+        if(isset($this->pendingTasks[$player])){
             return;
         }
 
-        $this->pendingTasks[$name] = true;
+        $this->pendingTasks[$player] = true;
 
         // NOTE:
         // We delay preview packets by 1 tick instead of sending them immediately.
@@ -166,14 +187,14 @@ final class BlockPreview{
         // our fake NORMAL-layer blocks, causing missing or flickering preview (especially on corners).
         // Sending preview one tick later guarantees that the server has finished its resync and
         // our preview safely "wins" as the last writer for the client view.
-        $this->plugin->getScheduler()->scheduleDelayedTask(new ClosureTask(function() use ($player, $name) : void{
-            unset($this->pendingTasks[$name]);
+        $this->plugin->getScheduler()->scheduleDelayedTask(new ClosureTask(function() use ($player) : void{
+            unset($this->pendingTasks[$player]);
 
-            $entries = $this->pendingEntries[$name] ?? null;
+            $entries = $this->pendingEntries[$player] ?? null;
             if($entries === null){
                 return;
             }
-            unset($this->pendingEntries[$name]);
+            unset($this->pendingEntries[$player]);
 
             if(!$player->isOnline()){
                 return;
@@ -192,9 +213,11 @@ final class BlockPreview{
     private function flush(Player $player, array $entries) : void{
         $packets = [];
         $positions = [];
+        $hasLiquid = false;
+        $world = $player->getWorld();
         foreach($entries as $entry){
             $pos = $entry->position;
-            if($pos->getWorld() !== $player->getWorld()){
+            if($pos->getWorld() !== $world){
                 continue;
             }
 
@@ -210,6 +233,7 @@ final class BlockPreview{
             );
 
             if($entry->liquidBlock !== null){
+                $hasLiquid = true;
                 $packets[] = UpdateBlockPacket::create(
                     $blockPosition,
                     $this->getRuntimeIdFromBlock($entry->liquidBlock),
@@ -220,8 +244,8 @@ final class BlockPreview{
         }
 
         if($positions !== []){
-            $this->lastPreview[$player->getName()] = $positions;
-            NetworkBroadcastUtils::broadcastPackets([$player], $packets);
+            $this->lastPreview[$player] = [$positions, WeakReference::create($world), $hasLiquid];
+            PacketDispatcher::send($player, $packets);
         }
     }
 
